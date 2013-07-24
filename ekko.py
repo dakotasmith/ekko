@@ -13,6 +13,8 @@ import hmac
 import random
 import base64
 
+from requests_oauthlib import OAuth1Session
+
 from optparse import OptionParser
 
 from xml.etree.ElementTree import ElementTree
@@ -79,35 +81,33 @@ class TwitterAccount(Account):
     def __init__(self, credentials):
         self.credentials = credentials
         self.username = credentials['username']
-        # self.consumer_key = credentials['consumer_key']
-        # self.consumer_secret = credentials['consumer_secret']
-        # self.access_token = credentials['access_token']
-        # self.access_token_secret = credentials['access_token_secret']
+        self.consumer_key = credentials['consumer_key']
+        self.consumer_secret = credentials['consumer_secret']
+        self.access_token = credentials['access_token']
+        self.access_token_secret = credentials['access_token_secret']
 
     def mirror(self, page_limit=None):
-        print 'downlading data for twitter account: %s...' % self.username
         page = 1
-
-        # oauth unnecessary for grabbing tweets, but necessary for favorites and other things
-        # TODO: use oauth when those credentials are there, grab more
-        #hook = OAuthHook(self.access_token, self.access_token_secret, self.consumer_key, self.consumer_secret, header_auth=True)
-        #client = requests.session(hooks={'pre_request': hook})
-        client = requests.session()
-        page = 1
+        print 'downloading data for twitter account: %s...' % self.username
+        oauth_session = OAuth1Session(self.consumer_key,
+                                      self.consumer_secret,
+                                      self.access_token,
+                                      self.access_token_secret)
+        count = 200
         while True:
-            print 'fetching page %i' % page
-            url = 'https://api.twitter.com/1/statuses/user_timeline.json?screen_name=%s&count=200&page=%i' % (self.username, page)
+            print 'fetching count %i' % count
+            url = 'https://api.twitter.com/1.1/statuses/user_timeline.json?' \
+                  'screen_name=%s&count=%s' % (self.username, count)
             print url
-            response = requests.get(url)
-            # TODO: twitter is creaky and we probably need to do some RETRIES here
-            # For now you usually have to run ekko.py mirror twitter a few times to grab it all
+            response = oauth_session.get(url)
             if(response.status_code != 200):
                 print 'did not get a 200 response from twitter, giving up'
-                break            
-            print 'saving page %i' % page
+                break
+            print 'saving count %i' % page
             temp_file = os.path.join(self.data_directory(), self.username + str(page) + '.json')
             write_file(temp_file, response.content)
-            page = page + 1
+            count *= 2
+            page += 1
             time.sleep(self.delay)
             if page_limit:
                 if page > page_limit:
